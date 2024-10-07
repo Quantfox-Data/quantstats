@@ -87,7 +87,7 @@ def snapshot(
                 multi_column = True
                 returns = returns.mean(axis=1)
                 title = title + " (daily equal-weighted*)"
-        returns.columns = strategy_colname
+        returns.columns = [strategy_colname]
 
     colors = _GRAYSCALE_COLORS if grayscale else _FLATUI_COLORS
     returns = _utils.make_portfolio(returns.dropna(), 1, mode).pct_change().fillna(0)

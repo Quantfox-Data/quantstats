@@ -119,7 +119,7 @@ def html(
     if isinstance(returns, _pd.Series):
         returns.name = strategy_title
     elif isinstance(returns, _pd.DataFrame):
-        returns.columns = strategy_title
+        returns.columns = [strategy_title]
 
     mtrx = metrics(
         returns=returns,
@@ -1477,81 +1477,43 @@ def _calc_dd(df, display=True, as_pct=False):
     if dd_info.empty:
         return _pd.DataFrame()
 
-    if "returns" in dd_info:
-        ret_dd = dd_info["returns"]
-    # to match multiple columns like returns_1, returns_2, ...
-    elif (
-        any(dd_info.columns.get_level_values(0).str.contains("returns"))
-        and dd_info.columns.get_level_values(0).nunique() > 1
-    ):
-        ret_dd = dd_info.loc[
-            :, dd_info.columns.get_level_values(0).str.contains("returns")
-        ]
-    else:
-        ret_dd = dd_info
+    # Handle MultiIndex columns
+    level_0 = dd_info.columns.get_level_values(0)
+    level_1 = dd_info.columns.get_level_values(1)
 
-    if (
-        any(ret_dd.columns.get_level_values(0).str.contains("returns"))
-        and ret_dd.columns.get_level_values(0).nunique() > 1
-    ):
-        dd_stats = {
-            col: {
-                "Max Drawdown %": ret_dd[col]
-                .sort_values(by="max drawdown", ascending=True)["max drawdown"]
-                .values[0]
-                / 100,
-                "Longest DD Days": str(
-                    _np.round(
-                        ret_dd[col]
-                        .sort_values(by="days", ascending=False)["days"]
-                        .values[0]
-                    )
-                ),
-                "Avg. Drawdown %": ret_dd[col]["max drawdown"].mean() / 100,
-                "Avg. Drawdown Days": str(_np.round(ret_dd[col]["days"].mean())),
-            }
-            for col in ret_dd.columns.get_level_values(0)
-        }
+    # Access 'max drawdown' column
+    max_dd_idx = [i for i, col in enumerate(level_1) if col == 'max drawdown']
+    if max_dd_idx:
+        col = dd_info.columns[max_dd_idx[0]]
+        max_drawdown_series = dd_info[col]
     else:
-        dd_stats = {
-            "returns": {
-                "Max Drawdown %": ret_dd.sort_values(by="max drawdown", ascending=True)[
-                    "max drawdown"
-                ].values[0]
-                / 100,
-                "Longest DD Days": str(
-                    _np.round(
-                        ret_dd.sort_values(by="days", ascending=False)["days"].values[0]
-                    )
-                ),
-                "Avg. Drawdown %": ret_dd["max drawdown"].mean() / 100,
-                "Avg. Drawdown Days": str(_np.round(ret_dd["days"].mean())),
-            }
-        }
-    if "benchmark" in df and (dd_info.columns, _pd.MultiIndex):
-        bench_dd = dd_info["benchmark"].sort_values(by="max drawdown")
-        dd_stats["benchmark"] = {
-            "Max Drawdown %": bench_dd.sort_values(by="max drawdown", ascending=True)[
-                "max drawdown"
-            ].values[0]
-            / 100,
-            "Longest DD Days": str(
-                _np.round(
-                    bench_dd.sort_values(by="days", ascending=False)["days"].values[0]
-                )
-            ),
-            "Avg. Drawdown %": bench_dd["max drawdown"].mean() / 100,
-            "Avg. Drawdown Days": str(_np.round(bench_dd["days"].mean())),
-        }
+        print("Column 'max drawdown' not found")
+        max_drawdown_series = None
+
+    # Access 'days' column
+    days_idx = [i for i, col in enumerate(level_1) if col == 'days']
+    if days_idx:
+        days_col = dd_info.columns[days_idx[0]]
+        days_series = dd_info[days_col]
+    else:
+        print("Column 'days' not found")
+        days_series = None
 
     # pct multiplier
     pct = 100 if display or as_pct else 1
 
-    dd_stats = _pd.DataFrame(dd_stats).T
-    dd_stats["Max Drawdown %"] = dd_stats["Max Drawdown %"].astype(float) * pct
-    dd_stats["Avg. Drawdown %"] = dd_stats["Avg. Drawdown %"].astype(float) * pct
+    # Prepare the drawdown statistics
+    dd_stats = {
+        'Max Drawdown %': (max_drawdown_series.min() / 100 * pct) if max_drawdown_series is not None else '-',
+        'Longest DD Days': str(int(days_series.max())) if days_series is not None else '-',
+        'Avg. Drawdown %': (max_drawdown_series.mean() / 100 * pct) if max_drawdown_series is not None else '-',
+        'Avg. Drawdown Days': str(int(days_series.mean())) if days_series is not None else '-',
+    }
 
-    return dd_stats.T
+    # Convert to DataFrame
+    dd_stats = _pd.DataFrame(dd_stats, index=[df.columns[0]] if isinstance(df, _pd.DataFrame) else ['returns']).T
+
+    return dd_stats
 
 
 def _html_table(obj, showindex="default"):
