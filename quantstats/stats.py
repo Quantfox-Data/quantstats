@@ -269,7 +269,7 @@ def autocorr_penalty(returns, prepare_returns=False):
 # ======= METRICS =======
 
 
-def sharpe(returns, rf=0.0, periods=252, annualize=True, smart=False):
+def sharpe(returns,isreturn: bool ,rf=0.0, periods=252, annualize=True, smart=False):
     """
     Calculates the sharpe ratio of access returns
 
@@ -285,8 +285,8 @@ def sharpe(returns, rf=0.0, periods=252, annualize=True, smart=False):
     """
     if rf != 0 and periods is None:
         raise Exception("Must provide periods if rf != 0")
-
-    returns = _utils._prepare_returns(returns, rf, periods)
+    if not(isreturn):
+        returns = _utils._prepare_returns(returns, rf, periods)
     divisor = returns.std(ddof=1)
     if smart:
         # penalize sharpe with auto correlation
